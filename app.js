@@ -6,6 +6,7 @@ wss.on('connection', function connection(ws) {
 
     ws.on('message', function incoming(message) {
         console.log(message);
+        //hahahaha
         ws.send(message);
     });
 
