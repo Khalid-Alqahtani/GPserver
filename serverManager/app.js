@@ -2,6 +2,7 @@
 const express = require('express');
 const  http = require('http');
 const WebSocket = require('ws');
+var mysql = require('mysql');
 // create module
 const app = express();
 
@@ -19,7 +20,7 @@ function brodcastAllprinters(ws,message) {
 
     let printerArr = UsersArr[ws.IDOB].printerArr;
     for(let i = 0 ; i < printerArr.length; i++){
-            printerArr[i].send(message);
+        printerArr[i].send(message);
     }
 }
 
@@ -27,18 +28,19 @@ function brodcastAllprinters(ws,message) {
 function defJSONMessageForPrinter(ws,message) {
     let data = JSON.parse(message);
     if(data["request"] === "update"){
-        let index = searchForprinter(ws);
+        let index = searchForPrinterByWS(ws);
         UsersArr[ws.IDOB].printerArr[index].data = {
-                                            "request":"update",
-                                            "type":ws.PID,
-                                            "ID" : ws.PID,
-                                            "headtemp" : data["headtemp"],
-                                            "bedtemp" : data["bedtemp"],
-                                            "jobname" : data["jobname"],
-                                            "jobstate" : data["jobstate"],
-                                            "progresspersent" : data["progresspersent"],
-                                            "progresstimeleft" : data["progresstimeleft"]
-                                            };
+            "request":"update",
+            "type":ws.PID,
+            "ID" : ws.PID,
+            "headtemp" : data["temperature"]["bed"]["actual"],
+            "bedtemp" : data["temperature"]["tool0"]["actual"],
+            "jobname" : "test",
+            "jobstate" : "ready",
+            "progresspersent" : "-",
+            "progresstimeleft" : "-"
+        };
+
         if (UsersArr[ws.IDOB].ws !== null){
             UsersArr[ws.IDOB].ws.send(JSON.stringify(UsersArr[ws.IDOB].printerArr[index].data));
         }
@@ -50,32 +52,32 @@ function defJSONMessageForPrinter(ws,message) {
     }
 }
 
-/*send the temp for the printer from user*/
+/send the temp for the printer from user/
 function setTemp(ws,type,ID,value) {
     let data = {"request" : "set",
-                "type" : "temp",
-                "temptype" : type,
-                "value" : value,
-                };
-    let index = searchForprinter(ws);
-    UsersArr[ws.IDOB].printerArr[index].ws.send(data);
+        "type" : "temp",
+        "temptype" : type,
+        "value" : value,
+    };
+    let index = searchForPrinterByID(ws,ID);
+    UsersArr[ws.IDOB].printerArr[index].send(JSON.stringify(data));
 }
 
-/*defind the message info for printer*/
+/defind the message info for printer/
 function defJSONMessageForUSer(ws,message) {
     let data = JSON.parse(message);
     if (data["request"] === "get"){
 
     } else if (data["request"] === "set"){
-                if(data["type"] === "temp"){
-                        setTemp(ws,data["temptype"],data["ID"],data["value"]);
-                } else if (data["type"] === "job"){
-                            setJob(ws,data["jobtype"],data["jobname"],data["ID"]);
-                }
+        if(data["type"] === "temp"){
+            setTemp(ws,data["temptype"],data["ID"],data["value"]);
+        } else if (data["type"] === "job"){
+            setJob(ws,data["jobtype"],data["jobname"],data["ID"]);
+        }
     }
 }
-/*search for the printer's index */
-function searchForprinter(ws) {
+/*search for the printer's index by ws */
+function searchForPrinterByWS(ws) {
     let printers = UsersArr[ws.IDOB].printerArr;
     for(let i =0; i < printers.length; i++){
         if (printers[i] !== null){
@@ -85,17 +87,31 @@ function searchForprinter(ws) {
         }
 
     }
+    return -1;
 }
 
-/*change the jon state for the printer from user*/
+/*search for the printer's index by ws and ID */
+function searchForPrinterByID(ws,ID) {
+    let printers = UsersArr[ws.IDOB].printerArr;
+    for(let i =0; i < printers.length; i++){
+        if (printers[i] !== null){
+            if (printers[i].PID === parseInt(ID)){
+                return i;
+            }
+        }
+
+    }
+    return -1;
+}
+
 function setJob(ws,jobtype,jobname,ID) {
     let data = {
         "request" : "set",
         "type" : "job",
-        "jobtype" : jobtype, /*start,pause,stop,new*/
+        "jobtype" : jobtype,
         "jobname" : jobname,
     };
-    let index = searchForprinter(ws);
+    let index = searchForPrinterByWS(ws);
     UsersArr[ws.IDOB].printerArr[index].ws.send(data);
 }
 
@@ -107,22 +123,38 @@ function spilt(ws){
     let protocol = ws.upgradeReq.headers['sec-websocket-protocol'];
     //spilt the info
     let a = protocol.split(",");
-    //change the info from String to Integer
-    for(let i = 1 ; i < a.length; i++){
-        a[i] = parseInt(a[i]);
+
+    if (a[0] === "signIn"){
+        ws.ConType = "signIn";
+    } else if (a[0] === "signUp"){
+        ws.ConType = "signUp";
+    } else if (a[0] === "user" || a[0] === "printer"){
+        //change the info from String to Integer
+        for(let i = 1 ; i < a.length; i++){
+            a[i] = parseInt(a[i]);
+        }
+
+        //defind the connection is't from user or printer
+        ws.ConType = a[0];
+        //defind the ID
+        ws.IDOB = a[1];
+
+        if(ws.ConType === "printer"){
+            ws.PID = a[2];
+        }
     }
 
-    //defind the connection is't from user or printer
-    ws.ConType = a[0];
-    //defind the ID
-    ws.IDOB = a[1];
 
-    if(ws.ConType === "printer"){
-        ws.PID = a[2];
-    }
 
 }
-/*add the coming connection to the server*/
+
+function checkForUSer(ws) {
+    if(UsersArr[ws.IDOB].ws !== null){
+        let data = JSON.stringify({"request":"updateAll"});
+        ws.send(data);
+    }
+}
+/add the coming connection to the server/
 function addConnectionToArray(ws){
     spilt(ws);
     if (UsersArr[ws.IDOB] == null) {
@@ -130,30 +162,119 @@ function addConnectionToArray(ws){
         if (ws.ConType === "user") {
             UsersArr[ws.IDOB].ws = ws;
             UsersArr[ws.IDOB].ID = ws.IDOB;
+            let data = JSON.stringify({"request":"updateAll"});
+            brodcastAllprinters(ws,data);
         } else if (ws.ConType === "printer") {
             UsersArr[ws.IDOB].ws = null;
             UsersArr[ws.IDOB].ID = ws.IDOB;
             UsersArr[ws.IDOB].printerArr.push(ws);
+           checkForUSer(ws);
         }
     } else {
         if (ws.ConType === "user") {
             UsersArr[ws.IDOB].ws = ws;
             UsersArr[ws.IDOB].ID = ws.IDOB;
+            let data = JSON.stringify({"request":"updateAll"});
+            brodcastAllprinters(ws,data);
         } else if (ws.ConType === "printer") {
-            UsersArr[ws.IDOB].ID = ws.IDOB;
-            UsersArr[ws.IDOB].printerArr.push(ws);
+            let index = searchForPrinterByWS(ws);
+            if (index !== -1){
+                UsersArr[ws.IDOB].ID = ws.IDOB;
+                UsersArr[ws.IDOB].printerArr[index] = ws;
+            } else {
+                UsersArr[ws.IDOB].ID = ws.IDOB;
+                UsersArr[ws.IDOB].printerArr.push(ws);
+            }
+            checkForUSer(ws);
+
         }
     }
 }
 
-/*update the printers for the user*/
+function conecctToDataBase() {
+    let con = mysql.createConnection({
+        host: "192.168.64.2",
+        user: "nn",
+        password: "123",
+        database:"RCM3D"
+    });
+
+    return con;
+}
+/check database for sign in/
+function signIn(ws,message) {
+
+    let data = JSON.parse(message);
+    let userName = data["userName"];
+    let passWord = data["passWord"];
+    let con = conecctToDataBase();
+
+    con.connect(function(err) {
+        if (err) throw err;
+        let searchQuery = "SELECT * FROM Account WHERE UserName = '"+userName+"' AND Pass = '"+passWord+"'";
+        con.query(searchQuery, function (err, result, fields) {
+            if (err) throw err;
+            if(result.length === 0){
+                ws.send(JSON.stringify({"state":"user name or password not correct"}));
+            } else {
+                let data = result[0];
+                ws.send(JSON.stringify({"state":"found" , "username": result[0].UserName ,"ID" :result[0].ID}));
+
+                //ws.close();
+            }
+
+        });
+    });
+}
+
+
+function signUp(ws,message) {
+    let data = JSON.parse(message);
+    let userName = data["userName"];
+    let passWord = data["passWord"];
+    let confirmPassWord = data["confirmPassWord"];
+    let email = data["email"];
+    let fName = data["fName"];
+    let lName = data["lName"];
+
+
+    if (passWord === confirmPassWord){
+        let con = conecctToDataBase();
+        con.connect(function(err) {
+            if (err) throw err;
+            let searchQuery = "SELECT * FROM Account WHERE email = '"+email+"' or UserName = '"+userName+"'";
+            con.query(searchQuery, function (err, result, fields) {
+                if (err) throw err;
+                if(result.length === 0){
+                    let addQuery = "INSERT INTO Account (userName, email, Pass, Fname, Lname) VALUES ('"+userName+"', '"+email+"','"+passWord+"','"+fName+"','"+lName+"')";
+                    con.query(addQuery, function (err, result, fields) {
+                        if (err) throw err;
+                        ws.send(JSON.stringify({"state":"Done"}));
+                    });
+                } else {
+                    ws.send(JSON.stringify({"state":"userExists"}))
+                    //علمني من اللي تكرر اليوزر ولا الايميل
+                }
+
+            });
+        });
+
+
+    } else {
+        ws.send(JSON.stringify({"state":"password Not Match"}));
+    }
+
+}
+
+/update the printers for the user/
 function updatePrintersForUser(ws){
     let printerArr = UsersArr[ws.IDOB].printerArr;
     let data = {"request":"update","type":"all",};
     for(let i = 0 ; i < printerArr.length; i++){
-            data[i] = printerArr[i].data;
+        data[i] = printerArr[i].data;
     }
     if (printerArr.length > 0){
+        data["count"] = printerArr.length;
         ws.send(JSON.stringify(data));
     }
 
@@ -161,8 +282,11 @@ function updatePrintersForUser(ws){
 
 // connection is coming
 wss.on('connection', (ws,rq) => {
+
     // upgrade the connection with the request
     ws.upgradeReq = rq;
+
+
 
     // add the coming connection to the arr
     addConnectionToArray(ws);
@@ -180,8 +304,35 @@ wss.on('connection', (ws,rq) => {
             defJSONMessageForPrinter(ws,message);
         } else if (ws.ConType === "user"){
             defJSONMessageForUSer(ws,message);
+        } else if (ws.ConType === "signIn") {
+            signIn(ws,message);
+        } else if (ws.ConType === "signUp"){
+            signUp(ws,message);
         }
+    });
 
+    ws.on('close', function() {
+        console.log('stopping client interval');
+        if (ws.ConType === "user"){
+            UsersArr[ws.IDOB].ws = null;
+            let data = JSON.stringify({"request":"userOffline"});
+            brodcastAllprinters(ws,data)
+        } else if (ws.ConType === "printer") {
+            if (UsersArr[ws.IDOB].ws !== null) {
+                UsersArr[ws.IDOB].ws.send(JSON.stringify(
+                    {
+                        "request": "update",
+                        "ID": ws.PID,
+                        "jobstate": "disconnected"
+                    }));
+                let index = searchForPrinterByWS(ws);
+                if(UsersArr[ws.IDOB].printerArr.length === 1){
+                    UsersArr[ws.IDOB].printerArr.pop();
+                } else {
+                    UsersArr[ws.IDOB].printerArr.splice(index, 1);
+                }
+            }
+        }
     });
 
 });
