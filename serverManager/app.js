@@ -33,8 +33,10 @@ function defJSONMessageForPrinter(ws,message) {
             "request":"update",
             "type":ws.PID,
             "ID" : ws.PID,
-            "headtemp" : data["temperature"]["bed"]["actual"],
-            "bedtemp" : data["temperature"]["tool0"]["actual"],
+            "headtemp" : data["temperature"]["tool0"]["actual"],
+            "headtemptarget" :data["temperature"]["tool0"]["target"],
+            "bedtemptarget" : data["temperature"]["bed"]["target"],
+            "bedtemp" : data["temperature"]["bed"]["actual"],
             "jobname" : "test",
             "jobstate" : "ready",
             "progresspersent" : "-",
@@ -63,11 +65,21 @@ function setTemp(ws,type,ID,value) {
     UsersArr[ws.IDOB].printerArr[index].send(JSON.stringify(data));
 }
 
-/defind the message info for printer/
+/*defind the message info for user*/
 function defJSONMessageForUSer(ws,message) {
     let data = JSON.parse(message);
     if (data["request"] === "get"){
-
+        if(data["live"] === "on"){
+            let index = searchForPrinterByID(ws,data["printer"]);
+            let printerData = {"request":"set","live":"on"};
+            UsersArr[ws.IDOB].printerArr[index].send(JSON.stringify(printerData));
+            let userData = {"request":"stream","ID":data["printer"],"url":""};
+            ws.send(JSON.stringify(userData));
+        } else if(data["live"] === "off"){
+            let index = searchForPrinterByID(ws,data["printer"]);
+            let dataJSON = {"request":"set","live":"off"};
+            UsersArr[ws.IDOB].printerArr[index].send(JSON.stringify(dataJSON));
+        }
     } else if (data["request"] === "set"){
         if(data["type"] === "temp"){
             setTemp(ws,data["temptype"],data["ID"],data["value"]);
@@ -201,7 +213,7 @@ function conecctToDataBase() {
 
     return con;
 }
-/check database for sign in/
+/*check database for sign in*/
 function signIn(ws,message) {
 
     let data = JSON.parse(message);
@@ -266,7 +278,7 @@ function signUp(ws,message) {
 
 }
 
-/update the printers for the user/
+/*update the printers for the user*/
 function updatePrintersForUser(ws){
     let printerArr = UsersArr[ws.IDOB].printerArr;
     let data = {"request":"update","type":"all",};
