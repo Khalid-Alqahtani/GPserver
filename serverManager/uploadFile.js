@@ -23,8 +23,8 @@ var app = express();
 
 //configuring the AWS environment
 AWS.config.update({
-  accessKeyId: "AKIAUVSLBLBHJ3ID3RHZ",
-  secretAccessKey: "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"
+  accessKeyId: "",
+  secretAccessKey: ""
 });
 
 var s3 = new AWS.S3();
