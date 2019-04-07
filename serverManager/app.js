@@ -148,23 +148,24 @@ function spilt(ws){
     } else if (a[0] === "signUp"){
         ws.ConType = "signUp";
     } else if (a[0] === "user" || a[0] === "printer"){
-        //change the info from String to Integer
-        for(let i = 1 ; i < a.length; i++){
-            a[i] = parseInt(a[i]);
-        }
+
 
         //defind the connection is't from user or printer
         ws.ConType = a[0];
         //defind the ID
-        ws.IDOB = a[1];
+        ws.IDOB = parseInt(a[1]);
 
         if(ws.ConType === "printer"){
-            ws.PID = a[2];
+            ws.PID = parseInt(a[2]);
         }
-    } else if(a[0] === "flutter"){
-        ws.IDOB = a[1];
-        ws.ConType = a[0];
-        printersInfoForMoplie(ws);
+
+        if (ws.ConType === "user" && a[2] !== null && a[2] === "flutter") {
+            try {
+                printersInfoForMoplie(ws);
+            } catch (e) {
+                console.log(e);
+            }
+        }
     }
 
 
@@ -180,45 +181,47 @@ function checkForUSer(ws) {
 /add the coming connection to the server/
 function addConnectionToArray(ws){
     spilt(ws);
-    if (UsersArr[ws.IDOB] == null) {
-        UsersArr[ws.IDOB] = {printerArr: []};
-        if (ws.ConType === "user") {
-            UsersArr[ws.IDOB].ws = ws;
-            UsersArr[ws.IDOB].ID = ws.IDOB;
-            let data = JSON.stringify({"request":"updateAll"});
-            brodcastAllprinters(ws,data);
-        } else if (ws.ConType === "printer") {
-            UsersArr[ws.IDOB].ws = null;
-            UsersArr[ws.IDOB].ID = ws.IDOB;
-            UsersArr[ws.IDOB].printerArr.push(ws);
-           checkForUSer(ws);
-        }
-    } else {
-        if (ws.ConType === "user") {
-            UsersArr[ws.IDOB].ws = ws;
-            UsersArr[ws.IDOB].ID = ws.IDOB;
-            let data = JSON.stringify({"request":"updateAll"});
-            brodcastAllprinters(ws,data);
-        } else if (ws.ConType === "printer") {
-            let index = searchForPrinterByWS(ws);
-            if (index !== -1){
+    if(ws.ConType === "user" || ws.ConType === "printer") {
+        if (UsersArr[ws.IDOB] == null) {
+            UsersArr[ws.IDOB] = {printerArr: []};
+            if (ws.ConType === "user") {
+                UsersArr[ws.IDOB].ws = ws;
                 UsersArr[ws.IDOB].ID = ws.IDOB;
-                UsersArr[ws.IDOB].printerArr[index] = ws;
-            } else {
+                let data = JSON.stringify({"request": "updateAll"});
+                brodcastAllprinters(ws, data);
+            } else if (ws.ConType === "printer") {
+                UsersArr[ws.IDOB].ws = null;
                 UsersArr[ws.IDOB].ID = ws.IDOB;
                 UsersArr[ws.IDOB].printerArr.push(ws);
+                checkForUSer(ws);
             }
-            checkForUSer(ws);
+        } else {
+            if (ws.ConType === "user") {
+                UsersArr[ws.IDOB].ws = ws;
+                UsersArr[ws.IDOB].ID = ws.IDOB;
+                let data = JSON.stringify({"request": "updateAll"});
+                brodcastAllprinters(ws, data);
+            } else if (ws.ConType === "printer") {
+                let index = searchForPrinterByWS(ws);
+                if (index !== -1) {
+                    UsersArr[ws.IDOB].ID = ws.IDOB;
+                    UsersArr[ws.IDOB].printerArr[index] = ws;
+                } else {
+                    UsersArr[ws.IDOB].ID = ws.IDOB;
+                    UsersArr[ws.IDOB].printerArr.push(ws);
+                }
+                checkForUSer(ws);
 
+            }
         }
     }
 }
 
 function conecctToDataBase() {
     let con = mysql.createConnection({
-        host: "192.168.64.2",
+        host: "160.153.133.170",
         user: "nn",
-        password: "123",
+        password: "12345",
         database:"RCM3D"
     });
 
@@ -234,25 +237,25 @@ function signIn(ws,message) {
 
     try {
         con.connect(function(err) {
-            if (err) return err;
+            if (err) throw err;
             let searchQuery = "SELECT * FROM Account WHERE UserName = '"+userName+"' AND Pass = '"+passWord+"'";
             con.query(searchQuery, function (err, result, fields) {
-                if (err) return err;
+                if (err) throw err;
                 if(result.length === 0){
                     ws.send(JSON.stringify({"state":"user name or password not correct"}));
+                    con.end();
                 } else {
                     let data = result[0];
                     ws.send(JSON.stringify({"state":"found" , "username": result[0].UserName ,"ID" :result[0].ID , "email":result[0].email}));
+                    con.end();
 
                     //ws.close();
                 }
-
             });
         });
     } catch (e) {
         console.log(e);
     }
-
 }
 
 
@@ -284,18 +287,20 @@ function signUp(ws,message) {
         let con = conecctToDataBase();
        try {
            con.connect(function(err) {
-               if (err) return err;
+               if (err) throw err;
                let searchQuery = "SELECT * FROM Account WHERE email = '"+email+"' or UserName = '"+userName+"'";
                con.query(searchQuery, function (err, result, fields) {
-                   if (err) return err;
+                   if (err) throw err;
                    if(result.length === 0){
                        let addQuery = "INSERT INTO Account (userName, email, Pass, Fname, Lname) VALUES ('"+userName+"', '"+email+"','"+passWord+"','"+fName+"','"+lName+"')";
                        con.query(addQuery, function (err, result, fields) {
-                           if (err) return err;
+                           if (err) throw err;
                            ws.send(JSON.stringify({"state":"Done"}));
+                           con.end();
                        });
                    } else {
-                       ws.send(JSON.stringify({"state":"userExists"}))
+                       ws.send(JSON.stringify({"state":"userExists"}));
+                       con.end();
                        //علمني من اللي تكرر اليوزر ولا الايميل
                    }
 
@@ -339,10 +344,10 @@ function printersInfoForMoplie(ws){
     let printerOwned = ws.IDOB;
     try {
         con.connect(function(err) {
-            if (err) return err;
+            if (err) throw err;
             let searchQuery = "SELECT ID FROM Printer WHERE printerOwned = '"+printerOwned+"'";
             con.query(searchQuery, function (err, result, fields) {
-                if (err) return err;
+                if (err) throw err;
                 if(result.length > 0){
                     let data = {"request":"PrintersNum","length":result.length};
                     for(var i =0; i<result.length;i++){
@@ -350,8 +355,9 @@ function printersInfoForMoplie(ws){
                     }
                     ws.send(JSON.stringify(data));
                     console.log(data);
+                    con.end();
                 } else {
-
+                con.end();
                 }
 
             });
@@ -391,10 +397,19 @@ wss.on('connection', (ws,rq) => {
                 defJSONMessageForPrinter(ws,message);
             } else if (ws.ConType === "user"){
                 defJSONMessageForUSer(ws,message);
+                console.log(message);
             } else if (ws.ConType === "signIn") {
-                signIn(ws,message);
+                try {
+                    signIn(ws,message);
+                } catch (e) {
+                  console.log(e);
+                }
             } else if (ws.ConType === "signUp"){
-                signUp(ws,message);
+                try {
+                    signUp(ws,message);
+                } catch (e) {
+                    console.log(e);
+                }
             }
         } catch (e) {
             console.log(e);
