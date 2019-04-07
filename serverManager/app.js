@@ -3,6 +3,8 @@ const express = require('express');
 const  http = require('http');
 const WebSocket = require('ws');
 var mysql = require('mysql');
+var listAllObjects = require('s3-list-all-objects');
+
 // create module
 const app = express();
 
@@ -85,6 +87,11 @@ function defJSONMessageForUSer(ws,message) {
             setTemp(ws,data["temptype"],data["ID"],data["value"]);
         } else if (data["type"] === "job"){
             setJob(ws,data["jobtype"],data["jobname"],data["ID"]);
+        } else if (data["type"] === "stop"){
+            let index = searchForPrinterByID(ws,data["ID"]);
+            UsersArr[ws.IDOB].printerArr[index].send(JSON.stringify({"request":"set","type":"stop"}));
+        } else if (data["type"] === "setTime"){
+            setTimeout(scheduleJob,data["time"],[ws,data["ID"],data["fileName"]]);
         }
     }
 }
@@ -154,6 +161,10 @@ function spilt(ws){
         if(ws.ConType === "printer"){
             ws.PID = a[2];
         }
+    } else if(a[0] === "flutter"){
+        ws.IDOB = a[1];
+        ws.ConType = a[0];
+        printersInfoForMoplie(ws);
     }
 
 
@@ -221,24 +232,43 @@ function signIn(ws,message) {
     let passWord = data["passWord"];
     let con = conecctToDataBase();
 
-    con.connect(function(err) {
-        if (err) throw err;
-        let searchQuery = "SELECT * FROM Account WHERE UserName = '"+userName+"' AND Pass = '"+passWord+"'";
-        con.query(searchQuery, function (err, result, fields) {
-            if (err) throw err;
-            if(result.length === 0){
-                ws.send(JSON.stringify({"state":"user name or password not correct"}));
-            } else {
-                let data = result[0];
-                ws.send(JSON.stringify({"state":"found" , "username": result[0].UserName ,"ID" :result[0].ID}));
+    try {
+        con.connect(function(err) {
+            if (err) return err;
+            let searchQuery = "SELECT * FROM Account WHERE UserName = '"+userName+"' AND Pass = '"+passWord+"'";
+            con.query(searchQuery, function (err, result, fields) {
+                if (err) return err;
+                if(result.length === 0){
+                    ws.send(JSON.stringify({"state":"user name or password not correct"}));
+                } else {
+                    let data = result[0];
+                    ws.send(JSON.stringify({"state":"found" , "username": result[0].UserName ,"ID" :result[0].ID , "email":result[0].email}));
 
-                //ws.close();
-            }
+                    //ws.close();
+                }
 
+            });
         });
-    });
+    } catch (e) {
+        console.log(e);
+    }
+
 }
 
+
+function myFunc(arg) {
+    console.log(`arg was => ${arg}`);
+}
+
+function scheduleJob(arg) {
+    let index = searchForPrinterByID(arg[0],arg[1]);
+    if(index !== -1){
+        if (UsersArr[ws.IDOB].printerArr[index].data["jobstate"] === "ready"){
+            UsersArr[ws.IDOB].printerArr[index].send(JSON.stringify({"request":"set","type":"setJob","fileUrl":""}));
+        }
+    }
+
+}
 
 function signUp(ws,message) {
     let data = JSON.parse(message);
@@ -252,29 +282,38 @@ function signUp(ws,message) {
 
     if (passWord === confirmPassWord){
         let con = conecctToDataBase();
-        con.connect(function(err) {
-            if (err) throw err;
-            let searchQuery = "SELECT * FROM Account WHERE email = '"+email+"' or UserName = '"+userName+"'";
-            con.query(searchQuery, function (err, result, fields) {
-                if (err) throw err;
-                if(result.length === 0){
-                    let addQuery = "INSERT INTO Account (userName, email, Pass, Fname, Lname) VALUES ('"+userName+"', '"+email+"','"+passWord+"','"+fName+"','"+lName+"')";
-                    con.query(addQuery, function (err, result, fields) {
-                        if (err) throw err;
-                        ws.send(JSON.stringify({"state":"Done"}));
-                    });
-                } else {
-                    ws.send(JSON.stringify({"state":"userExists"}))
-                    //علمني من اللي تكرر اليوزر ولا الايميل
-                }
+       try {
+           con.connect(function(err) {
+               if (err) return err;
+               let searchQuery = "SELECT * FROM Account WHERE email = '"+email+"' or UserName = '"+userName+"'";
+               con.query(searchQuery, function (err, result, fields) {
+                   if (err) return err;
+                   if(result.length === 0){
+                       let addQuery = "INSERT INTO Account (userName, email, Pass, Fname, Lname) VALUES ('"+userName+"', '"+email+"','"+passWord+"','"+fName+"','"+lName+"')";
+                       con.query(addQuery, function (err, result, fields) {
+                           if (err) return err;
+                           ws.send(JSON.stringify({"state":"Done"}));
+                       });
+                   } else {
+                       ws.send(JSON.stringify({"state":"userExists"}))
+                       //علمني من اللي تكرر اليوزر ولا الايميل
+                   }
 
-            });
-        });
+               });
+           });
+       } catch (e) {
+           console.log(e);
+       }
 
 
     } else {
         ws.send(JSON.stringify({"state":"password Not Match"}));
     }
+
+}
+
+
+function getListFileName(ws) {
 
 }
 
@@ -292,11 +331,47 @@ function updatePrintersForUser(ws){
 
 }
 
+
+
+function printersInfoForMoplie(ws){
+    let con = conecctToDataBase();
+
+    let printerOwned = ws.IDOB;
+    try {
+        con.connect(function(err) {
+            if (err) return err;
+            let searchQuery = "SELECT ID FROM Printer WHERE printerOwned = '"+printerOwned+"'";
+            con.query(searchQuery, function (err, result, fields) {
+                if (err) return err;
+                if(result.length > 0){
+                    let data = {"request":"PrintersNum","length":result.length};
+                    for(var i =0; i<result.length;i++){
+                        data[i] = result[i]["ID"];
+                    }
+                    ws.send(JSON.stringify(data));
+                    console.log(data);
+                } else {
+
+                }
+
+            });
+        });
+    } catch (e) {
+        console.log(e);
+    }
+
+}
+
 // connection is coming
 wss.on('connection', (ws,rq) => {
 
     // upgrade the connection with the request
     ws.upgradeReq = rq;
+    setTimeout(myFunc, 3000, 'con1');
+
+
+    setTimeout(myFunc, 10000, 'con2');
+
 
 
 
@@ -304,23 +379,28 @@ wss.on('connection', (ws,rq) => {
     addConnectionToArray(ws);
     if(ws.ConType === "user") {
         updatePrintersForUser(ws);
-        let data = {"name":"m"};
-        ws.send(JSON.stringify(data));
+
     }
 
 
     //connection is up, let's add a simple simple event
     ws.on('message', (message) => {
 
-        if (ws.ConType === "printer") {
-            defJSONMessageForPrinter(ws,message);
-        } else if (ws.ConType === "user"){
-            defJSONMessageForUSer(ws,message);
-        } else if (ws.ConType === "signIn") {
-            signIn(ws,message);
-        } else if (ws.ConType === "signUp"){
-            signUp(ws,message);
+        try {
+            if (ws.ConType === "printer") {
+                defJSONMessageForPrinter(ws,message);
+            } else if (ws.ConType === "user"){
+                defJSONMessageForUSer(ws,message);
+            } else if (ws.ConType === "signIn") {
+                signIn(ws,message);
+            } else if (ws.ConType === "signUp"){
+                signUp(ws,message);
+            }
+        } catch (e) {
+            console.log(e);
         }
+
+
     });
 
     ws.on('close', function() {
