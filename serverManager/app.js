@@ -115,6 +115,7 @@ function defJSONMessageForUSer(ws,message) {
         } else if (data["type"] === "job"){
             setJob(ws,data["jobtype"],data["jobname"],data["ID"]);
         } else if (data["type"] === "stop"){
+            console.log(data);
             let index = searchForPrinterByID(ws,data["ID"]);
             try {
                 UsersArr[ws.IDOB].printerArr[index].send(JSON.stringify({"request":"set","type":"stop"}));
@@ -123,7 +124,17 @@ function defJSONMessageForUSer(ws,message) {
                 console.log(e);
             }
         } else if (data["type"] === "setTime"){
-            setTimeout(scheduleJob,data["time"],[ws,data["ID"],data["fileName"]]);
+            console.log(data);
+            setTimeout(scheduleJob,parseInt(data["time"]),[ws,data["ID"],data["fileName"]]);
+        } else if(data["type"] === "start"){
+            console.log(data);
+            let index = searchForPrinterByID(ws,data["ID"]);
+            try {
+                UsersArr[ws.IDOB].printerArr[index].send(JSON.stringify({"request":"set","type":"start","url":""}));
+
+            } catch (e) {
+                console.log(e);
+            }
         }
     }
 }
@@ -260,9 +271,9 @@ function addConnectionToArray(ws){
 
 function conecctToDataBase() {
     let con = mysql.createConnection({
-        host: "160.153.133.170",
+        host: "192.168.64.2",
         user: "nn",
-        password: "12345",
+        password: "123",
         database:"RCM3D"
     });
 
@@ -445,9 +456,13 @@ function printersInfoForMoplie(ws){
     } catch (e) {
         console.log(e);
     }
-
 }
 
+
+function sendFileName(ws){
+    let data = {"request":"FileUpdate","count":"3","0":"sndibad","1":"Meshal","2":"RCM3D"};
+    ws.send(JSON.stringify(data));
+}
 // connection is coming
 wss.on('connection', (ws,rq) => {
 
@@ -465,7 +480,7 @@ wss.on('connection', (ws,rq) => {
     addConnectionToArray(ws);
     if(ws.ConType === "user") {
         updatePrintersForUser(ws);
-
+        sendFileName(ws);
     }
 
 
