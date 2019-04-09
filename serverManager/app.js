@@ -22,7 +22,11 @@ function brodcastAllprinters(ws,message) {
 
     let printerArr = UsersArr[ws.IDOB].printerArr;
     for(let i = 0 ; i < printerArr.length; i++){
-        printerArr[i].send(message);
+        try {
+            printerArr[i].send(message);
+        } catch (e) {
+            console.log(e);
+        }
     }
 }
 
@@ -46,7 +50,11 @@ function defJSONMessageForPrinter(ws,message) {
         };
 
         if (UsersArr[ws.IDOB].ws !== null){
-            UsersArr[ws.IDOB].ws.send(JSON.stringify(UsersArr[ws.IDOB].printerArr[index].data));
+            try {
+                UsersArr[ws.IDOB].ws.send(JSON.stringify(UsersArr[ws.IDOB].printerArr[index].data));
+            } catch (e) {
+                console.log(e);
+            }
         }
 
     } else if (data["request"] === "get"){
@@ -64,7 +72,12 @@ function setTemp(ws,type,ID,value) {
         "value" : value,
     };
     let index = searchForPrinterByID(ws,ID);
-    UsersArr[ws.IDOB].printerArr[index].send(JSON.stringify(data));
+    try {
+        UsersArr[ws.IDOB].printerArr[index].send(JSON.stringify(data));
+
+    } catch (e) {
+        console.log(e);
+    }
 }
 
 /*defind the message info for user*/
@@ -74,13 +87,27 @@ function defJSONMessageForUSer(ws,message) {
         if(data["live"] === "on"){
             let index = searchForPrinterByID(ws,data["printer"]);
             let printerData = {"request":"set","live":"on"};
-            UsersArr[ws.IDOB].printerArr[index].send(JSON.stringify(printerData));
+            try {
+                UsersArr[ws.IDOB].printerArr[index].send(JSON.stringify(printerData));
+
+            } catch (e) {
+                console.log(e);
+            }
             let userData = {"request":"stream","ID":data["printer"],"url":""};
-            ws.send(JSON.stringify(userData));
+            try {
+                ws.send(JSON.stringify(userData));
+            } catch (e) {
+                console.log(e);
+            }
         } else if(data["live"] === "off"){
             let index = searchForPrinterByID(ws,data["printer"]);
             let dataJSON = {"request":"set","live":"off"};
-            UsersArr[ws.IDOB].printerArr[index].send(JSON.stringify(dataJSON));
+            try {
+                UsersArr[ws.IDOB].printerArr[index].send(JSON.stringify(dataJSON));
+
+            } catch (e) {
+                console.log(e);
+            }
         }
     } else if (data["request"] === "set"){
         if(data["type"] === "temp"){
@@ -89,7 +116,12 @@ function defJSONMessageForUSer(ws,message) {
             setJob(ws,data["jobtype"],data["jobname"],data["ID"]);
         } else if (data["type"] === "stop"){
             let index = searchForPrinterByID(ws,data["ID"]);
-            UsersArr[ws.IDOB].printerArr[index].send(JSON.stringify({"request":"set","type":"stop"}));
+            try {
+                UsersArr[ws.IDOB].printerArr[index].send(JSON.stringify({"request":"set","type":"stop"}));
+
+            } catch (e) {
+                console.log(e);
+            }
         } else if (data["type"] === "setTime"){
             setTimeout(scheduleJob,data["time"],[ws,data["ID"],data["fileName"]]);
         }
@@ -131,7 +163,12 @@ function setJob(ws,jobtype,jobname,ID) {
         "jobname" : jobname,
     };
     let index = searchForPrinterByWS(ws);
+try {
     UsersArr[ws.IDOB].printerArr[index].ws.send(data);
+
+}catch (e) {
+    console.log(e);
+}
 }
 
 
@@ -175,7 +212,11 @@ function spilt(ws){
 function checkForUSer(ws) {
     if(UsersArr[ws.IDOB].ws !== null){
         let data = JSON.stringify({"request":"updateAll"});
-        ws.send(data);
+        try {
+            ws.send(data);
+        } catch (e) {
+            console.log(e);
+        }
     }
 }
 /add the coming connection to the server/
@@ -242,11 +283,21 @@ function signIn(ws,message) {
             con.query(searchQuery, function (err, result, fields) {
                 if (err) throw err;
                 if(result.length === 0){
-                    ws.send(JSON.stringify({"state":"user name or password not correct"}));
+                    try {
+                        ws.send(JSON.stringify({"state":"user name or password not correct"}));
+
+                    } catch (e) {
+                        console.log(e);
+                    }
                     con.end();
                 } else {
                     let data = result[0];
-                    ws.send(JSON.stringify({"state":"found" , "username": result[0].UserName ,"ID" :result[0].ID , "email":result[0].email}));
+                    try {
+                        ws.send(JSON.stringify({"state":"found" , "username": result[0].UserName ,"ID" :result[0].ID , "email":result[0].email}));
+
+                    } catch (e) {
+                        console.log(e);
+                    }
                     con.end();
 
                     //ws.close();
@@ -267,7 +318,11 @@ function scheduleJob(arg) {
     let index = searchForPrinterByID(arg[0],arg[1]);
     if(index !== -1){
         if (UsersArr[ws.IDOB].printerArr[index].data["jobstate"] === "ready"){
-            UsersArr[ws.IDOB].printerArr[index].send(JSON.stringify({"request":"set","type":"setJob","fileUrl":""}));
+            try {
+                UsersArr[ws.IDOB].printerArr[index].send(JSON.stringify({"request":"set","type":"setJob","fileUrl":""}));
+            } catch (e) {
+                console.log(e);
+            }
         }
     }
 
@@ -295,11 +350,21 @@ function signUp(ws,message) {
                        let addQuery = "INSERT INTO Account (userName, email, Pass, Fname, Lname) VALUES ('"+userName+"', '"+email+"','"+passWord+"','"+fName+"','"+lName+"')";
                        con.query(addQuery, function (err, result, fields) {
                            if (err) throw err;
-                           ws.send(JSON.stringify({"state":"Done"}));
+                           try {
+                               ws.send(JSON.stringify({"state":"Done"}));
+
+                           } catch (e) {
+                               console.log(e);
+                           }
                            con.end();
                        });
                    } else {
-                       ws.send(JSON.stringify({"state":"userExists"}));
+                       try {
+                           ws.send(JSON.stringify({"state":"userExists"}));
+
+                       } catch (e) {
+                           console.log(e);
+                       }
                        con.end();
                        //علمني من اللي تكرر اليوزر ولا الايميل
                    }
@@ -312,7 +377,12 @@ function signUp(ws,message) {
 
 
     } else {
-        ws.send(JSON.stringify({"state":"password Not Match"}));
+        try {
+            ws.send(JSON.stringify({"state":"password Not Match"}));
+
+        } catch (e) {
+            console.log(e);
+        }
     }
 
 }
@@ -331,7 +401,12 @@ function updatePrintersForUser(ws){
     }
     if (printerArr.length > 0){
         data["count"] = printerArr.length;
-        ws.send(JSON.stringify(data));
+        try {
+            ws.send(JSON.stringify(data));
+
+        } catch (e) {
+            console.log(e);
+        }
     }
 
 }
@@ -353,7 +428,12 @@ function printersInfoForMoplie(ws){
                     for(var i =0; i<result.length;i++){
                         data[i] = result[i]["ID"];
                     }
-                    ws.send(JSON.stringify(data));
+                    try {
+                        ws.send(JSON.stringify(data));
+
+                    }catch (e) {
+                        console.log(e);
+                    }
                     console.log(data);
                     con.end();
                 } else {
@@ -426,12 +506,16 @@ wss.on('connection', (ws,rq) => {
             brodcastAllprinters(ws,data)
         } else if (ws.ConType === "printer") {
             if (UsersArr[ws.IDOB].ws !== null) {
-                UsersArr[ws.IDOB].ws.send(JSON.stringify(
-                    {
-                        "request": "update",
-                        "ID": ws.PID,
-                        "jobstate": "disconnected"
-                    }));
+                try {
+                    UsersArr[ws.IDOB].ws.send(JSON.stringify(
+                        {
+                            "request": "update",
+                            "ID": ws.PID,
+                            "jobstate": "disconnected"
+                        }));
+                } catch (e) {
+                    console.log(e);
+                }
                 let index = searchForPrinterByWS(ws);
                 if(UsersArr[ws.IDOB].printerArr.length === 1){
                     UsersArr[ws.IDOB].printerArr.pop();
