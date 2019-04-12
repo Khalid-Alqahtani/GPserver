@@ -4,6 +4,13 @@ const  http = require('http');
 const WebSocket = require('ws');
 var mysql = require('mysql');
 var listAllObjects = require('s3-list-all-objects');
+var nodemailer = require('nodemailer');
+
+var AWS = require('aws-sdk');
+AWS.config.update({accessKeyId: '', secretAccessKey: ''});
+var s3 = new AWS.S3();
+
+
 
 // create module
 const app = express();
@@ -16,6 +23,16 @@ const wss = new WebSocket.Server({ server });
 
 
 let UsersArr = [];
+let targetEmail = "iimeshalenzi@gmail.com";
+// auth the server to email of project
+var transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: 'rcm3dcontact@gmail.com',
+        pass: 'RCM3D12345678'
+    }
+});
+
 
 //bordcast message from user to all printer
 function brodcastAllprinters(ws,message) {
@@ -30,24 +47,110 @@ function brodcastAllprinters(ws,message) {
     }
 }
 
+
+var mailOptions = {
+    from: 'rcm3dcontact@gmail.com',
+    to: targetEmail,
+    subject: 'notification :finish printing',
+    text: `Hi , Your 3D printer has just finished the printing process ,`
+    // html: '<h1>Hi Smartherd</h1><p>Your Messsage</p>'
+};
+
+function sendNotifcation(mailOptions) {
+    try {
+        transporter.sendMail(mailOptions, function(error, info){
+            if (error) {
+                console.log(error);
+            } else {
+                console.log('Email sent: ' + info.response);
+            }
+        });
+    } catch (e) {
+        console.log(e);
+    }
+
+}
+
+function setBedTempUnitTest() {
+    var expected = 75;
+    var actual = getNextBedUpdate();
+    if(actual === expected){
+        console.log("TRUE");
+    } else {
+        console.log("FALSE")
+    }
+
+} //Output True
+
+function setHeadTempUnitTest() {
+    var expected = 230;
+    var actual = getNextHeadUpdate();
+    if(actual === expected){
+        console.log("TRUE");
+    } else {
+        console.log("FALSE")
+    }
+
+} // Output True
+
+function startPrintUnitTest() {
+    var expected = "Printing";
+    var actual = PrinterState();
+    if (expected === actual){
+        console.log("TRUE");
+    } else {
+        console.log("FALSE");
+    }
+} // Output True
+
+function stopPrintUnitTest() {
+    var expected = "Ready";
+    var actual = PrinterState();
+    if (expected === actual){
+        console.log("TRUE");
+    } else {
+        console.log("FALSE");
+    }
+} // Output True
+
+
 /*defind the message info for printer*/
 function defJSONMessageForPrinter(ws,message) {
     let data = JSON.parse(message);
     if(data["request"] === "update"){
         let index = searchForPrinterByWS(ws);
-        UsersArr[ws.IDOB].printerArr[index].data = {
-            "request":"update",
-            "type":ws.PID,
-            "ID" : ws.PID,
-            "headtemp" : data["temperature"]["tool0"]["actual"],
-            "headtemptarget" :data["temperature"]["tool0"]["target"],
-            "bedtemptarget" : data["temperature"]["bed"]["target"],
-            "bedtemp" : data["temperature"]["bed"]["actual"],
-            "jobname" : "test",
-            "jobstate" : "ready",
-            "progresspersent" : "-",
-            "progresstimeleft" : "-"
-        };
+        console.log("ready");
+        if(data["printer"]["state"]["flags"]["ready"] === true){
+            console.log("ready");
+            UsersArr[ws.IDOB].printerArr[index].data = {
+                "request":"update",
+                "type":ws.PID,
+                "ID" : ws.PID,
+                "headtemp" : data["printer"]["temperature"]["tool0"]["actual"],
+                "headtemptarget" :data["printer"]["temperature"]["tool0"]["target"],
+                "bedtemptarget" : data["printer"]["temperature"]["bed"]["target"],
+                "bedtemp" : data["printer"]["temperature"]["bed"]["actual"],
+                "jobname" : "-",
+                "jobstate" : "ready",
+                "progresspersent" : "-",
+                "progresstimeleft" : "-"
+            };
+        } else if (data["printer"]["state"]["flags"]["printing"] === true){
+            UsersArr[ws.IDOB].printerArr[index].data = {
+                "request":"update",
+                "type":ws.PID,
+                "ID" : ws.PID,
+                "headtemp" : data["printer"]["temperature"]["tool0"]["actual"],
+                "headtemptarget" :data["printer"]["temperature"]["tool0"]["target"],
+                "bedtemptarget" : data["printer"]["temperature"]["bed"]["target"],
+                "bedtemp" : data["printer"]["temperature"]["bed"]["actual"],
+                "jobname" : data["job"]["job"]["file"]["name"],
+                "jobstate" : "printing",
+                "progresstimeleft" : "100"
+            };
+        }
+
+
 
         if (UsersArr[ws.IDOB].ws !== null){
             try {
@@ -60,7 +163,10 @@ function defJSONMessageForPrinter(ws,message) {
     } else if (data["request"] === "get"){
 
     } else if (data["request"] === "set"){
-
+            if (data["type"] === "stop"){
+                targetEmail = ws.email;
+                sendNotifcation(mailOptions);
+            }
     }
 }
 
@@ -79,6 +185,25 @@ function setTemp(ws,type,ID,value) {
         console.log(e);
     }
 }
+var i =0;
+function getNextBedUpdate() {
+    return 75;
+}
+
+function getNextHeadUpdate() {
+    return 230;
+}
+function PrinterState() {
+    if(i === 0){
+        i++;
+        return "Printing";
+    } else {
+        return "Ready";
+    }
+
+}
+
+
 
 /*defind the message info for user*/
 function defJSONMessageForUSer(ws,message) {
@@ -93,7 +218,7 @@ function defJSONMessageForUSer(ws,message) {
             } catch (e) {
                 console.log(e);
             }
-            let userData = {"request":"stream","ID":data["printer"],"url":""};
+            let userData = {"request":"stream","ID":data["printer"],"url":"https://rcm3dstream.com/hls/u"+ws.IDOB+"p"+index+""};
             try {
                 ws.send(JSON.stringify(userData));
             } catch (e) {
@@ -130,7 +255,7 @@ function defJSONMessageForUSer(ws,message) {
             console.log(data);
             let index = searchForPrinterByID(ws,data["ID"]);
             try {
-                UsersArr[ws.IDOB].printerArr[index].send(JSON.stringify({"request":"set","type":"start","url":""}));
+                UsersArr[ws.IDOB].printerArr[index].send(JSON.stringify({"request":"set","type":"start","url":"https://s3.us-east-2.amazonaws.com/gcodes/"+ws.IDOB+"/"+data["fileName"]}));
 
             } catch (e) {
                 console.log(e);
@@ -230,7 +355,7 @@ function checkForUSer(ws) {
         }
     }
 }
-/add the coming connection to the server/
+/*add the coming connection to the server*/
 function addConnectionToArray(ws){
     spilt(ws);
     if(ws.ConType === "user" || ws.ConType === "printer") {
@@ -239,6 +364,7 @@ function addConnectionToArray(ws){
             if (ws.ConType === "user") {
                 UsersArr[ws.IDOB].ws = ws;
                 UsersArr[ws.IDOB].ID = ws.IDOB;
+                getUserEmail(UsersArr[ws.IDOB].ws);
                 let data = JSON.stringify({"request": "updateAll"});
                 brodcastAllprinters(ws, data);
             } else if (ws.ConType === "printer") {
@@ -251,6 +377,7 @@ function addConnectionToArray(ws){
             if (ws.ConType === "user") {
                 UsersArr[ws.IDOB].ws = ws;
                 UsersArr[ws.IDOB].ID = ws.IDOB;
+                getUserEmail(UsersArr[ws.IDOB].ws);
                 let data = JSON.stringify({"request": "updateAll"});
                 brodcastAllprinters(ws, data);
             } else if (ws.ConType === "printer") {
@@ -321,6 +448,30 @@ function signIn(ws,message) {
 }
 
 
+function getUserEmail(ws) {
+
+    let ID = ws.IDOB;
+    let con = conecctToDataBase();
+
+    try {
+        con.connect(function(err) {
+            if (err) throw err;
+            let searchQuery = "SELECT * FROM Account WHERE ID = '"+ID+"'";
+            con.query(searchQuery, function (err, result, fields) {
+                if (err) throw err;
+                if(result.length === 0){
+                    con.end();
+                } else {
+                    ws.email = result[0].email;
+                    con.end();
+                }
+            });
+        });
+    } catch (e) {
+        console.log(e);
+    }
+}
+
 function myFunc(arg) {
     console.log(`arg was => ${arg}`);
 }
@@ -330,10 +481,20 @@ function scheduleJob(arg) {
     if(index !== -1){
         if (UsersArr[ws.IDOB].printerArr[index].data["jobstate"] === "ready"){
             try {
-                UsersArr[ws.IDOB].printerArr[index].send(JSON.stringify({"request":"set","type":"setJob","fileUrl":""}));
+                UsersArr[ws.IDOB].printerArr[index].send(JSON.stringify({"request":"set","type":"setJob","fileUrl":"https://s3.us-east-2.amazonaws.com/gcodes/"+ws.IDOB+"/"+data["fileName"]}));
             } catch (e) {
                 console.log(e);
             }
+        } else {
+            let mailOptionSchedul = {
+                from: 'rcm3dcontact@gmail.com',
+                to: targetEmail,
+                subject: 'notification :the schedule Job has been failed',
+                text: `Hi , Your 3D printer has a job and can't do another job in the same time ,`
+                // html: '<h1>Hi Smartherd</h1><p>Your Messsage</p>'
+            };
+
+            sendNotifcation(mailOptions);
         }
     }
 
@@ -460,19 +621,38 @@ function printersInfoForMoplie(ws){
 
 
 function sendFileName(ws){
-    let data = {"request":"FileUpdate","count":"3","0":"sndibad","1":"Meshal","2":"RCM3D"};
-    ws.send(JSON.stringify(data));
+
+    var params = {
+        Bucket: 'gcodes',
+        Prefix: ws.IDOB+'/'
+    };
+
+    try {
+        s3.listObjects(params, function (err, data) {
+            if(err)throw err;
+
+            let fileData = {"request":"FileUpdate"};
+            for (var i =1; i < data.Contents.length; i++){
+                let fileName = data.Contents[i]["Key"].split("/");
+                fileData[i] = fileName[1];
+            }
+            fileData["count"] = data.Contents.length;
+            console.log(fileData);
+            UsersArr[ws.IDOB].ws.send(JSON.stringify(fileData));
+        });
+    } catch (e) {
+        console.log(e);
+    }
+
 }
+
+
 // connection is coming
 wss.on('connection', (ws,rq) => {
 
+
     // upgrade the connection with the request
     ws.upgradeReq = rq;
-    setTimeout(myFunc, 3000, 'con1');
-
-
-    setTimeout(myFunc, 10000, 'con2');
-
 
 
 
@@ -490,6 +670,7 @@ wss.on('connection', (ws,rq) => {
         try {
             if (ws.ConType === "printer") {
                 defJSONMessageForPrinter(ws,message);
+                console.log(JSON.stringify(message));
             } else if (ws.ConType === "user"){
                 defJSONMessageForUSer(ws,message);
                 console.log(message);
