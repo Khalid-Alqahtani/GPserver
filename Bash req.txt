@@ -1,0 +1,22 @@
+//start
+sudo apt-get update && sudo apt-get upgrade
+//python
+sudo apt-get update && sudo apt-get install build-essential checkinstall && sudo apt-get install libreadline-gplv2-dev libncursesw5-dev libssl-dev libsqlite3-dev tk-dev libgdbm-dev libc6-dev libbz2-dev && cd /usr/src && sudo wget https://www.python.org/ftp/python/2.7.15/Python-2.7.15.tgz && sudo tar xzf Python-2.7.15.tgz && cd Python-2.7.15 && sudo ./configure --enable-optimizations && sudo make altinstall && python2.7 -V
+//git
+cd && sudo apt-get install git
+//pip
+cd && curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py && sudo python get-pip.py
+//virtualenv
+cd && sudo pip install virtualenv
+//octoprint 
+cd && cd ~ && sudo apt update && sudo apt install python-pip python-dev python-setuptools python-virtualenv git libyaml-dev build-essential && mkdir OctoPrint && cd OctoPrint && virtualenv venv && source venv/bin/activate && pip install pip --upgrade && pip install https://get.octoprint.org/latest && sudo usermod -a -G tty pi && sudo usermod -a -G dialout pi && ~/OctoPrint/venv/bin/octoprint serve
+//octoprintAutoStart
+cd && wget https://github.com/foosel/OctoPrint/raw/master/scripts/octoprint.init && sudo mv octoprint.init /etc/init.d/octoprint && wget https://github.com/foosel/OctoPrint/raw/master/scripts/octoprint.default && sudo mv octoprint.default /etc/default/octoprint && sudo chmod +x /etc/init.d/octoprint && chmod ugo+x /etc/init.d/octoprint && cd sudo update-rc.d octoprint defaults
+//node 
+cd && curl -sL https://deb.nodesource.com/setup_8.x |sudo bash - && sudo apt-get install -y nodejs && node --version && npm --version
+// nginx rtmp-module
+yes yes | cd && sudo yum update && sudo yum upgrade && sudo yum install git gcc make pcre-devel openssl-devel zlib1g-dev && sudo mkdir ~/build && cd ~/build && sudo git clone git://github.com/arut/nginx-rtmp-module.git && sudo wget http://nginx.org/download/nginx-1.14.1.tar.gz && sudo tar xzf nginx-1.14.1.tar.gz && cd nginx-1.14.1 && sudo ./configure --with-http_ssl_module --add-module=../nginx-rtmp-module && sudo make && sudo make install && sudo /usr/local/nginx/sbin/nginx
+// nginx stop-test-re
+sudo /usr/local/nginx/sbin/nginx -s stop && sudo /usr/local/nginx/sbin/nginx -t && sudo /usr/local/nginx/sbin/nginx
+
+// npm dep
