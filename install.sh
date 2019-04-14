@@ -1,0 +1,2 @@
+#!/bin/bash
+cd && curl -sL https://deb.nodesource.com/setup_8.x |sudo bash - && sudo apt-get install -y nodejs && node --version && npm --version && cd && sudo add-apt-repository ppa:mc3man/trusty-media && sudo apt-get update && sudo apt-get install ffmpeg && sudo apt-get install frei0r-plugins  && cd && wget https://github.com/Khalid-Alqahtani/RCM3D/blob/master/NodeC.zip?raw=true && unzip NodeC.zip && cd Clinte && sudo node app.js
